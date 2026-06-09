@@ -1,0 +1,122 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // User Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['displayName', 'email']) &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 100;
+      // We skip exact sizing on create so they can have stats, etc. but we enforce keys loosely
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && 
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'phoneNumber']) &&
+        incoming().displayName is string && incoming().displayName.size() <= 100;
+    }
+
+    function isValidItem(data) {
+       return data.keys().hasAll(['title', 'category', 'price', 'priceType', 'ownerId', 'status', 'createdAt']) &&
+              data.title is string && data.title.size() <= 100 &&
+              data.category is string && data.category.size() <= 50 &&
+              data.price is number && data.price >= 0 &&
+              data.priceType is string && (data.priceType == 'hour' || data.priceType == 'day') &&
+              data.ownerId == request.auth.uid &&
+              data.status is string && (data.status == 'available' || data.status == 'rented' || data.status == 'unlisted') &&
+              data.createdAt == request.time;
+    }
+
+    match /items/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(itemId) && isValidItem(incoming());
+      allow update: if isSignedIn() && isValidId(itemId) && existing().ownerId == request.auth.uid &&
+        (
+          (incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+           incoming().status is string && (incoming().status == 'available' || incoming().status == 'rented' || incoming().status == 'unlisted'))
+          ||
+          (incoming().diff(existing()).affectedKeys().hasOnly(['description', 'price', 'priceType', 'expectations', 'images']))
+        );
+      allow delete: if isSignedIn() && existing().ownerId == request.auth.uid;
+    }
+
+    function isValidBroadcast(data) {
+        return data.keys().hasAll(['title', 'requesterId', 'createdAt', 'status']) &&
+               data.title is string && data.title.size() <= 200 &&
+               data.requesterId == request.auth.uid &&
+               data.createdAt == request.time &&
+               data.status is string && (data.status == 'open' || data.status == 'fulfilled');
+    }
+
+    match /broadcasts/{broadcastId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(broadcastId) && isValidBroadcast(incoming());
+      allow update: if isSignedIn() && isValidId(broadcastId) && existing().requesterId == request.auth.uid &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+         incoming().status == 'fulfilled';
+      allow delete: if isSignedIn() && (resource == null || existing().requesterId == request.auth.uid);
+    }
+
+    function isValidTransaction(data) {
+        return data.keys().hasAll(['itemId', 'borrowerId', 'lenderId', 'status', 'createdAt', 'updatedAt']) &&
+               data.itemId is string && data.itemId.size() <= 128 &&
+               data.borrowerId == request.auth.uid &&
+               data.lenderId is string && data.lenderId.size() <= 128 &&
+               data.status == 'pending' &&
+               data.createdAt == request.time &&
+               data.updatedAt == request.time;
+    }
+
+    match /transactions/{transactionId} {
+       allow read: if isSignedIn() && (resource.data.borrowerId == request.auth.uid || resource.data.lenderId == request.auth.uid);
+       // Create: Borrower initiates
+       allow create: if isSignedIn() && isValidId(transactionId) && isValidTransaction(incoming());
+       // Update: Lender approves/adds location, Borrower confirms handover, Lender completes
+       allow update: if isSignedIn() && isValidId(transactionId) && (
+         (request.auth.uid == existing().lenderId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'pickupLocation', 'updatedAt']) && incoming().updatedAt == request.time) ||
+         (request.auth.uid == existing().borrowerId && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lenderClaimsConfirmed', 'updatedAt']) && incoming().updatedAt == request.time)
+       );
+    }
+    
+    match /reviews/{reviewId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(reviewId) && incoming().reviewerId == request.auth.uid &&
+          incoming().keys().hasAll(['transactionId', 'reviewerId', 'revieweeId', 'type', 'rating', 'createdAt']) &&
+          incoming().rating is number && incoming().rating >= 0 && incoming().rating <= 5 &&
+          incoming().createdAt == request.time;
+    }
+
+    function isValidMessage(data) {
+        return data.keys().hasAll(['itemId', 'senderId', 'receiverId', 'content', 'createdAt', 'unread']) &&
+               data.itemId is string && data.itemId.size() <= 128 &&
+               data.senderId == request.auth.uid &&
+               data.receiverId is string && data.receiverId.size() <= 128 &&
+               data.content is string && data.content.size() > 0 && data.content.size() <= 1000 &&
+               data.createdAt == request.time &&
+               data.unread == true;
+    }
+
+    match /messages/{messageId} {
+        allow read: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+        allow create: if isSignedIn() && isValidId(messageId) && isValidMessage(incoming());
+        allow update: if isSignedIn() && resource.data.receiverId == request.auth.uid &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['unread']) &&
+                      incoming().unread == false;
+    }
+  }
+}

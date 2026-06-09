@@ -1,0 +1,6 @@
+{
+  "name": "Share Hive",
+  "description": "Community Rental Web Application exclusively for Dayananda Sagar College of Engineering",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

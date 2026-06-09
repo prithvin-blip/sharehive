@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Student user profile",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lenderRating": { "type": "number", "description": "0-5 average rating" },
+        "borrowerRating": { "type": "number", "description": "0-5 average rating" },
+        "email": { "type": "string" }
+      },
+      "required": ["displayName", "email"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "Item listed for rent.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "priceType": { "type": "string", "enum": ["hour", "day"] },
+        "expectations": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["available", "rented"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["title", "category", "price", "priceType", "ownerId", "status", "createdAt"]
+    },
+    "BroadcastRequest": {
+      "title": "BroadcastRequest",
+      "description": "Emergency broadcast request for an item.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "requesterId": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "fulfilled"] }
+      },
+      "required": ["title", "requesterId", "createdAt", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A rental agreement and timeline.",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string" },
+        "borrowerId": { "type": "string" },
+        "lenderId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "handover_pending", "active", "returned"] },
+        "price": { "type": "number" },
+        "pickupLocation": { "type": "string" },
+        "lenderClaimsConfirmed": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["itemId", "borrowerId", "lenderId", "status", "createdAt", "updatedAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Review for a transaction.",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string" },
+        "reviewerId": { "type": "string" },
+        "revieweeId": { "type": "string" },
+        "type": { "type": "string", "enum": ["lender_to_borrower", "borrower_to_lender"] },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["transactionId", "reviewerId", "revieweeId", "type", "rating", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "/items/{itemId}": {
+      "schema": { "$ref": "#/entities/Item" },
+      "description": "Marketplace items"
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": { "$ref": "#/entities/BroadcastRequest" },
+      "description": "Emergency broadcast board"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Rental transactions"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Reviews of users"
+    }
+  }
+}
